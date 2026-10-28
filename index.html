@@ -431,6 +431,11 @@ section.deck{scroll-margin-top:44px}
 button.nextbtn:not(:disabled){background:var(--c1);color:var(--bg);border-color:var(--c1);font-weight:600}
 .pgres{margin-top:16px}
 #exam-score .gradeline{margin-bottom:2px}
+
+.ab{border-bottom:1px dotted color-mix(in srgb,var(--muted) 70%,transparent);cursor:help}
+.ab:hover{border-bottom-color:var(--c1);color:var(--c1)}
+.msg.user .ab{border-bottom-color:currentColor}
+.msg.user .ab:hover{color:inherit}
 </style>
 
 <div id="tip" role="tooltip"></div><button type="button" id="askbtn" aria-expanded="false" aria-controls="askpanel"><span class="dot"></span>Ask Claude</button>
@@ -2345,13 +2350,13 @@ document.querySelectorAll('[data-fn] input[type=range]').forEach(i=>upd(i,true))
 
 /* ---------- tooltips ---------- */
 const tip=$('tip');let tipEl=null;
-function showTip(el){tipEl=el;if(el.dataset.gl!==undefined){const g=GL[+el.dataset.gl];tip.innerHTML='<span class="tt">'+g[1]+'</span>'+g[2]+'<span class="tc">'+g[3]+'</span>';}else tip.textContent=el.dataset.tip;tip.classList.add('on');const r=el.getBoundingClientRect(),tw=tip.offsetWidth,th=tip.offsetHeight;let x=Math.min(window.innerWidth-tw-12,Math.max(12,r.left+r.width/2-tw/2));let y=r.top-th-8;if(y<8)y=r.bottom+8;tip.style.left=x+'px';tip.style.top=y+'px';}
+function showTip(el){tipEl=el;if(el.dataset.ab!==undefined){const a=ABBR[el.dataset.ab];tip.innerHTML='<span class="tt">'+el.dataset.ab+' · '+a[0]+'</span>'+a[1];}else if(el.dataset.gl!==undefined){const g=GL[+el.dataset.gl];tip.innerHTML='<span class="tt">'+g[1]+'</span>'+g[2]+'<span class="tc">'+g[3]+'</span>';}else tip.textContent=el.dataset.tip;tip.classList.add('on');const r=el.getBoundingClientRect(),tw=tip.offsetWidth,th=tip.offsetHeight;let x=Math.min(window.innerWidth-tw-12,Math.max(12,r.left+r.width/2-tw/2));let y=r.top-th-8;if(y<8)y=r.bottom+8;tip.style.left=x+'px';tip.style.top=y+'px';}
 function hideTip(){tipEl=null;tip.classList.remove('on');}
-document.addEventListener('pointerover',e=>{const t=e.target.closest('.t,.g');if(t&&e.pointerType!=='touch')showTip(t);});
-document.addEventListener('pointerout',e=>{const t=e.target.closest('.t,.g');if(t&&e.pointerType!=='touch')hideTip();});
+document.addEventListener('pointerover',e=>{const t=e.target.closest('.t,.g,.ab');if(t&&e.pointerType!=='touch')showTip(t);});
+document.addEventListener('pointerout',e=>{const t=e.target.closest('.t,.g,.ab');if(t&&e.pointerType!=='touch')hideTip();});
 document.addEventListener('focusin',e=>{if(e.target.matches('.t,.g'))showTip(e.target);});
 document.addEventListener('focusout',e=>{if(e.target.matches('.t,.g'))hideTip();});
-document.addEventListener('click',e=>{const t=e.target.closest('.t,.g');if(t){if(tipEl===t)hideTip();else showTip(t);}else if(tipEl)hideTip();});
+document.addEventListener('click',e=>{const t=e.target.closest('.t,.g,.ab');if(t){if(t.classList.contains('ab')&&t.closest('label'))e.preventDefault();if(tipEl===t)hideTip();else showTip(t);}else if(tipEl)hideTip();});
 window.addEventListener('scroll',()=>{if(tipEl)hideTip();},{passive:true});
 
 /* ---------- checklists ---------- */
@@ -3598,6 +3603,158 @@ $('askclear').onclick=()=>{if(busy&&ctl)ctl.abort();turns=[];log.innerHTML='';in
 })();
 
 window.addEventListener('hashchange',route);route();
+/* ---------- Abbreviation tooltips (everywhere, including quizzes and chat) ---------- */
+const ABBR={
+OLS:['Ordinary least squares','Fits a straight line by minimizing squared errors. Here it is the naive benchmark: on 0/1, censored, truncated or selected data it is usually biased.'],
+LPM:['Linear probability model','OLS run on a 0/1 outcome, so β is read as a change in probability. Simple, but predictions can leave [0, 1] and the errors are heteroskedastic by construction.'],
+MLE:['Maximum likelihood estimation (or estimator)','Choose the parameters that make the observed data most probable. Used for probit, logit, tobit, Heckman, Poisson, hazard models and most of this course.'],
+ML:['Maximum likelihood','Estimate parameters by maximizing the likelihood of the observed data; see MLE.'],
+QMLE:['Quasi-maximum likelihood estimation','MLE under a distribution that may be wrong. Still consistent if the part that matters (e.g., the conditional mean in Poisson) is right; use robust SEs.'],
+FIML:['Full-information maximum likelihood','Estimate all equations jointly (e.g., Heckman selection and outcome together) instead of in two steps; efficient if the joint distribution is right.'],
+NLS:['Nonlinear least squares','Minimize squared errors for a nonlinear mean such as exp(X′β). Consistent, but ignores how the variance moves with the mean.'],
+WNLS:['Weighted nonlinear least squares','NLS with each observation weighted by 1/variance; for counts this reproduces the Poisson first-order conditions.'],
+WLS:['Weighted least squares','OLS with each observation weighted by 1/σᵢ², which fixes known heteroskedasticity.'],
+FWLS:['Feasible weighted least squares','WLS with estimated weights. In the LPM, weights come from p̂(1 − p̂), which breaks when p̂ falls outside [0, 1].'],
+LS:['Least squares','Estimate by minimizing the sum of squared errors.'],
+GMM:['Generalized method of moments','Pick β so sample averages of moment conditions such as E[(y − e^{X′β})Z] = 0 are as close to zero as possible. Needs only those moments, not a full distribution.'],
+IV:['Instrumental variables','A variable Z that moves the endogenous regressor but is unrelated to the error; it isolates the exogenous part of the variation.'],
+SE:['Standard error','The estimated standard deviation of an estimator: how much β̂ would bounce around from sample to sample.'],
+SD:['Standard deviation','The square root of the variance: the typical spread around the mean.'],
+HC:['Heteroskedasticity-consistent','Robust (White/sandwich) standard errors that stay valid when the error variance differs across observations.'],
+HCCME:['Heteroskedasticity-consistent covariance matrix estimator','White\'s sandwich estimator of Var(β̂), valid under unknown heteroskedasticity.'],
+CDF:['Cumulative distribution function','F(z) = P(Z ≤ z). Probit uses the normal CDF Φ and logit the logistic CDF Λ to map X′β into a probability.'],
+LR:['Likelihood ratio (test)','LR = 2(ln L_unrestricted − ln L_restricted), compared with χ²(q). Tests restrictions by how much the fit drops when you impose them.'],
+LM:['Lagrange multiplier (score) test','Tests restrictions using only the restricted model: is the slope of ln L far from zero there?'],
+LRI:['Likelihood ratio index (McFadden pseudo-R²)','1 − ln L / ln L₀: how far the model climbs from intercept-only toward a perfect fit. Typical values are small (0.2–0.4 is good).'],
+AIC:['Akaike information criterion','−2 ln L + 2k: fit penalized for parameters. Lower is better; used to choose among non-nested models or the number of support points.'],
+BIC:['Bayesian information criterion','−2 ln L + k ln n: like AIC with a heavier penalty in large samples.'],
+POPC:['Proportion of observations correctly predicted','Share of cases where the predicted class (p̂ ≥ 0.5) matches y. Compare it with the base rate, since always predicting the majority already scores high.'],
+ME:['Marginal effect','How much the predicted probability (or mean) changes when one regressor rises by one unit; in a probit it is φ(X′β)β.'],
+MEM:['Marginal effect at the mean','The marginal effect evaluated for one imaginary average person, f(X̄′β)β.'],
+AME:['Average marginal effect','Compute each person\'s marginal effect f(Xᵢ′β)β and average them. Usually preferred to MEM.'],
+FOC:['First-order condition','Setting the derivative of the objective (e.g., ln L) to zero; the equations the estimator solves.'],
+DGP:['Data-generating process','The true model that produced the data, as assumed in a simulation or theory.'],
+RE:['Random effects','Treat each unit\'s intercept μᵢ as a random draw uncorrelated with X, and integrate it out (e.g., Butler–Moffitt quadrature for probit).'],
+FE:['Fixed effects','Give each unit its own intercept. In probit with short panels this suffers from the incidental-parameters problem; conditional logit and FE Poisson avoid it.'],
+GHK:['Geweke–Hajivassiliou–Keane simulator','Simulates multivariate normal probabilities by drawing each error from a truncated normal in turn; used for multivariate probit and MNP.'],
+RIS:['Recursive importance sampling','The family of simulators GHK belongs to: draw errors one at a time conditional on the earlier ones.'],
+GTL:['Generalized Tukey lambda distribution','A two-parameter family GTL(α, δ) for the error that can mimic uniform, normal, logistic or skewed shapes; the basis of pregibit.'],
+FGM:['Farlie–Gumbel–Morgenstern copula','A simple copula F₁F₂[1 + θ(1 − F₁)(1 − F₂)] that allows only weak dependence (Kendall\'s τ between −2/9 and 2/9).'],
+MNL:['Multinomial logit','Choice among J unordered options with Gumbel errors: P(j) = e^{Vⱼ}/Σₖe^{Vₖ}. Coefficients are relative to a base option; implies IIA.'],
+NMNL:['Nested multinomial logit','MNL with options grouped into nests whose errors are correlated (dissimilarity λ), relaxing IIA across nests.'],
+CL:['Conditional logit','Logit choice model driven by attributes of the alternatives (price, time); MNL is CL with person traits interacted with option dummies.'],
+MNP:['Multinomial probit','Choice model with jointly normal errors, so options can be close substitutes (no IIA); probabilities need simulation (GHK).'],
+IIA:['Independence of irrelevant alternatives','In MNL the odds between two options ignore every other option, so a new option steals from all others proportionally (the red-bus/blue-bus problem).'],
+RUM:['Random utility model','Each person picks the option with the highest utility Vⱼ + εⱼ; the distribution of ε determines probit, logit, MNL or MNP.'],
+CLAD:['Censored least absolute deviations','Powell\'s semiparametric estimator for censored data: median regression on max(0, X′β). Consistent without normality or homoskedasticity.'],
+SCLS:['Symmetrically censored least squares','Powell\'s semiparametric censored-regression estimator that trims the uncensored tail to restore symmetry.'],
+TN:['Truncated normal','A normal distribution cut off at a threshold; the mean shifts by σλ(α).'],
+NB:['Negative binomial','Count model that allows overdispersion: a Poisson whose rate varies across people (gamma heterogeneity).'],
+NegBin:['Negative binomial','Count model allowing variance above the mean; NB1 has Var = (1 + α)μ, NB2 has Var = μ + αμ².'],
+NegBin2:['Negative binomial, type 2','NB2: variance μ + αμ², growing with the square of the mean.'],
+NB1:['Negative binomial, type 1','Variance (1 + α)μ: a constant multiple of the mean.'],
+NB2:['Negative binomial, type 2','Variance μ + αμ²: overdispersion grows with the mean. The default nbreg in Stata.'],
+ZIP:['Zero-inflated Poisson','Mixes a never-type group (always 0) with a Poisson group, so P(0) = π + (1 − π)e^{−λ}.'],
+ZINB:['Zero-inflated negative binomial','Like ZIP, but the count part is negative binomial to also allow overdispersion.'],
+SUP:['Seemingly unrelated Poisson','Winkelmann\'s bivariate count model yⱼ = zⱼ + u with a shared Poisson shock u; correlation can only be positive.'],
+SUNB:['Seemingly unrelated negative binomial','The NB1 version of SUP, allowing overdispersion in correlated counts.'],
+SUR:['Seemingly unrelated regressions','Several equations estimated jointly because their errors are correlated.'],
+CIF:['Cumulative incidence function','With competing risks, the probability of exiting by cause j by time t: ∫₀ᵗ λⱼ(s)S(s)ds.'],
+KM:['Kaplan–Meier estimator','Nonparametric survival curve: Ŝ(t) = Π(1 − dⱼ/Nⱼ) over exit times, with censored spells leaving the risk set.'],
+LQ:['Location quotient','A local industry\'s employment share relative to the national share; Oka\'s measure of agglomeration.'],
+PPV:['Positive predictive value','Of all statistically significant findings, the share that are actually true: PPV = (1 − β)R / ((1 − β)R + α). Low prior odds R or low power make it fall.'],
+PAP:['Pre-analysis plan','A detailed plan, filed before seeing the data, of exactly which hypotheses and analyses you will run; limits specification searching.'],
+QRP:['Questionable research practice','Things like dropping outliers or adding controls until p < 0.05; not fraud, but it inflates false positives.'],
+BMA:['Bayesian model averaging','Average estimates across all candidate models, weighted by each model\'s posterior probability, instead of picking one.'],
+PIP:['Posterior inclusion probability','In BMA, the total posterior probability of models that include a given variable; high PIP means robust.'],
+BH:['Benjamini–Hochberg procedure','Controls the false discovery rate across many tests: reject the k smallest p-values with p₍ₖ₎ ≤ kα/m.'],
+KS:['Kolmogorov–Smirnov test','Tests whether two distributions differ by their largest CDF gap; used on distributions of test statistics.'],
+RCT:['Randomized controlled trial','Treatment assigned at random, so treated and control groups are comparable by design.'],
+MC:['Monte Carlo','Simulation: generate many artificial data sets from a known DGP to see how an estimator behaves.'],
+MCQ:['Multiple-choice question','A question with one correct option among several.'],
+DID:['Difference-in-differences','Compare the change over time for a treated group with the change for a control group.'],
+RDD:['Regression discontinuity design','Compare units just above and just below a cutoff that determines treatment.'],
+OVB:['Omitted variable bias','Bias from leaving out a variable that affects y and is correlated with an included regressor.'],
+UI:['Unemployment insurance','Benefits paid to eligible unemployed workers; their expiry creates spikes in the exit hazard from unemployment.'],
+HMDA:['Home Mortgage Disclosure Act','Its loan-application data (Boston HMDA, Munnell et al. 1996) are the course\'s mortgage-denial example.'],
+LTV:['Loan-to-value ratio','Loan amount divided by the home\'s value; higher LTV means less equity and more risk.'],
+DTI:['Debt-to-income ratio','Monthly debt payments divided by monthly income; a key underwriting variable.'],
+FHA:['Federal Housing Administration','U.S. agency that insures low-down-payment mortgages.'],
+ARM:['Adjustable-rate mortgage','A mortgage whose interest rate resets with market rates.'],
+HELOC:['Home equity line of credit','A revolving loan secured by the borrower\'s home equity.'],
+PMI:['Private mortgage insurance','Insurance borrowers pay when the down payment is small (high LTV).'],
+APR:['Annual percentage rate','The yearly cost of credit, including fees.'],
+MBS:['Mortgage-backed security','A bond backed by a pool of mortgages.'],
+HOLC:['Home Owners\' Loan Corporation','1930s agency whose A–D neighborhood grades ("redlining" maps) are an ordered-category example.'],
+FICO:['FICO credit score','The standard U.S. credit score (300–850).'],
+EITC:['Earned Income Tax Credit','U.S. refundable tax credit for low- and moderate-income workers.'],
+CTC:['Child Tax Credit','U.S. tax credit per qualifying child.'],
+IRS:['Internal Revenue Service','The U.S. federal tax agency.'],
+AGI:['Adjusted gross income','Income on a U.S. tax return after certain deductions; the base for many credits.'],
+MTR:['Marginal tax rate','Tax paid on the next dollar of income.'],
+VAT:['Value-added tax','A consumption tax collected at each stage of production.'],
+IRA:['Individual retirement account','A tax-advantaged U.S. retirement savings account.'],
+SNAP:['Supplemental Nutrition Assistance Program','U.S. food-assistance program (formerly food stamps).'],
+TANF:['Temporary Assistance for Needy Families','U.S. cash-welfare program.'],
+WIC:['Special Supplemental Nutrition Program for Women, Infants, and Children','U.S. nutrition program for low-income mothers and young children.'],
+ACA:['Affordable Care Act','The 2010 U.S. health reform (Medicaid expansion, marketplaces).'],
+HMO:['Health maintenance organization','Managed-care insurance plan with a restricted provider network.'],
+PPO:['Preferred provider organization','Insurance plan with a network but coverage for out-of-network care at higher cost.'],
+HDHP:['High-deductible health plan','Insurance with low premiums and a high deductible.'],
+ER:['Emergency room','Hospital emergency department.'],
+GP:['General practitioner','A primary-care doctor.'],
+BMI:['Body mass index','Weight in kg divided by height in meters squared.'],
+HIE:['Health Insurance Experiment','The RAND experiment (1970s–80s) that randomized cost sharing.'],
+RAND:['RAND Corporation','Research institute; ran the Health Insurance Experiment.'],
+GPA:['Grade point average','Average course grade, usually on a 0–4 scale.'],
+AP:['Advanced Placement','College-level high-school courses with end-of-year exams.'],
+SAT:['SAT college admissions test','Standardized U.S. college entrance exam.'],
+ACT:['ACT college admissions test','Standardized U.S. college entrance exam.'],
+GRE:['Graduate Record Examination','Standardized test for graduate-school admission.'],
+GED:['General Educational Development credential','High-school equivalency credential.'],
+HS:['High school','Secondary school.'],
+BA:['Bachelor of Arts','A four-year college degree.'],
+STEM:['Science, technology, engineering and mathematics','Fields grouped together in education and labor studies.'],
+STAR:['Project STAR (Student–Teacher Achievement Ratio)','Tennessee class-size experiment that randomized students to small or regular classes.'],
+PSID:['Panel Study of Income Dynamics','Long-running U.S. household panel survey.'],
+NLSY:['National Longitudinal Survey of Youth','U.S. panel survey following cohorts of young people.'],
+NLSY79:['National Longitudinal Survey of Youth 1979','The NLSY cohort first surveyed in 1979.'],
+CPS:['Current Population Survey','Monthly U.S. labor-force survey.'],
+SIPP:['Survey of Income and Program Participation','U.S. panel survey on income and program use.'],
+QCEW:['Quarterly Census of Employment and Wages','U.S. administrative data on employment and wages by county and industry.'],
+HRS:['Health and Retirement Study','U.S. panel survey of people over 50.'],
+GDP:['Gross domestic product','Total value of final goods and services produced.'],
+OECD:['Organisation for Economic Co-operation and Development','Group of mostly high-income countries.'],
+NBER:['National Bureau of Economic Research','U.S. research organization; publishes working papers.'],
+IZA:['IZA Institute of Labor Economics','Bonn research institute; publishes discussion papers (IZA DP).'],
+AER:['American Economic Review','Top general-interest economics journal.'],
+QJE:['Quarterly Journal of Economics','Top general-interest economics journal.'],
+JPE:['Journal of Political Economy','Top general-interest economics journal.'],
+JEL:['Journal of Economic Literature','AEA journal of survey articles.'],
+AEA:['American Economic Association','Professional association of U.S. economists.'],
+JASA:['Journal of the American Statistical Association','Leading statistics journal.'],
+PNAS:['Proceedings of the National Academy of Sciences','Multidisciplinary science journal.'],
+EER:['European Economic Review','Economics journal.'],
+WTP:['Willingness to pay','The most a person would pay for something.'],
+COVID:['Coronavirus disease 2019','The pandemic disease.'],
+TFU:['True / False / Uncertain','Question format: give a verdict and the right reason.'],
+};
+const ABRE=new RegExp('(?<![\\w\\-])('+Object.keys(ABBR).sort((a,b)=>b.length-a.length).join('|')+')(s)?(?![\\w])','g');
+const ABSKIP='script,style,textarea,input,select,mjx-container,.t,.g,.ab,code,#tip,svg,.tabbrand,.eq.tex .lab,title';
+function abWrapText(tn){const txt=tn.nodeValue;if(!txt||!/[A-Z]{2}/.test(txt))return;
+  const parts=txt.split(/(\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\])/);let changed=false;const frag=document.createDocumentFragment();
+  parts.forEach((pt,k)=>{if(k%2===1){frag.appendChild(document.createTextNode(pt));return;}let last=0,m;ABRE.lastIndex=0;
+    while((m=ABRE.exec(pt))){changed=true;if(m.index>last)frag.appendChild(document.createTextNode(pt.slice(last,m.index)));const sp=document.createElement('span');sp.className='ab';sp.dataset.ab=m[1];sp.textContent=m[0];frag.appendChild(sp);last=m.index+m[0].length;}
+    if(last<pt.length)frag.appendChild(document.createTextNode(pt.slice(last)));});
+  if(changed)tn.parentNode.replaceChild(frag,tn);}
+function applyAbbr(root){if(!root||root.nodeType!==1&&root.nodeType!==3)return;
+  if(root.nodeType===3){if(root.parentElement&&!root.parentElement.closest(ABSKIP))abWrapText(root);return;}
+  if(root.closest(ABSKIP))return;
+  const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:n=>n.parentElement&&n.parentElement.closest(ABSKIP)?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});
+  const ns=[];while(w.nextNode())ns.push(w.currentNode);ns.forEach(abWrapText);}
+const abObs=new MutationObserver(ms=>{for(const m of ms){if(m.type==='characterData'){applyAbbr(m.target);continue;}for(const n of m.addedNodes)if(n.isConnected)applyAbbr(n);}abObs.takeRecords();});
+applyAbbr(document.body);abObs.observe(document.body,{childList:true,subtree:true,characterData:true});
+
 
 </script>
 
