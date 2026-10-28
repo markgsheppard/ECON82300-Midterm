@@ -424,6 +424,13 @@ section.deck{scroll-margin-top:44px}
 #askpanel header b,#askpanel header button{white-space:nowrap}
 #askpanel header .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 @media (max-width:900px){.wrap{grid-template-columns:1fr}nav.rail{top:calc(env(safe-area-inset-top,0px) + 32px)}.rail a{font-size:12px}.qq .qt{font-size:18px}.opt{font-size:16.5px}.qfb{font-size:16px}.fbrow{grid-template-columns:1fr;gap:2px}}
+
+.pager{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0 6px;padding-top:14px;border-top:1px solid var(--line)}
+.pager span{font-family:var(--f-mono);font-size:12.5px;color:var(--muted)}
+.pager button:disabled{opacity:.4;cursor:default}
+button.nextbtn:not(:disabled){background:var(--c1);color:var(--bg);border-color:var(--c1);font-weight:600}
+.pgres{margin-top:16px}
+#exam-score .gradeline{margin-bottom:2px}
 </style>
 
 <div id="tip" role="tooltip"></div><button type="button" id="askbtn" aria-expanded="false" aria-controls="askpanel"><span class="dot"></span>Ask Claude</button>
@@ -438,8 +445,8 @@ section.deck{scroll-margin-top:44px}
 <div class="examview" id="examview" hidden>
   <div class="exhead">
     <div class="eyebrow">Full quiz · all twelve decks</div>
-    <h1>Every checkpoint question in one exam</h1>
-    <p class="note" style="max-width:68ch">89 questions mixing multiple choice and True/False/Uncertain with a reason. Each one is graded the moment you answer, with formal and intuitive explanations. True/False/Uncertain items need both the verdict and the reason right.</p>
+    <h1>Every checkpoint question, one test at a time</h1>
+    <p class="note" style="max-width:68ch">89 questions in 12 short tests, one per deck. Finish a test to see your score for it, then go on to the next; your collective score carries across all of them. Each question is graded the moment you answer, with formal and intuitive explanations. True/False/Uncertain items need both the verdict and the reason right.</p>
     <div class="btns"><div class="seg"><label><input type="radio" name="ex-mode" value="deck" checked>In deck order</label><label><input type="radio" name="ex-mode" value="mixed">Shuffled across decks</label></div><button type="button" id="ex-restart">Start a fresh attempt</button><a href="#top">← Back to the study guide</a></div>
   </div>
   <div class="topichost"></div>
@@ -451,7 +458,7 @@ section.deck{scroll-margin-top:44px}
   <div class="exhead">
     <div class="eyebrow">Practice MCQs · new questions</div>
     <h1>72 fresh multiple-choice questions</h1>
-    <p class="note" style="max-width:68ch">These are new questions, separate from the checkpoints, built from the lecture slides: worked numbers, Stata output, Monte Carlo tables and the applied papers. Each is graded the moment you click, with formal and intuitive explanations, and your running grade updates as you go. Your answers are saved in this browser.</p>
+    <p class="note" style="max-width:68ch">New questions built from the lecture slides (worked numbers, Stata output, Monte Carlo tables and the applied papers), in 12 short tests of 6, one per deck. Finish a test to see your score for it and move to the next; your collective grade carries across all of them. Your answers are saved in this browser.</p>
     <div class="btns"><button type="button" id="mcq-missed">Retry the ones I missed</button><button type="button" id="mcq-reset">Reset my answers</button><a href="#top">← Back to the study guide</a></div>
   </div>
   <div class="topichost"></div>
@@ -3263,25 +3270,37 @@ let exBest={};try{exBest=JSON.parse(localStorage.getItem('econ82300-exam')||'{}'
 function exBuild(){let items=[];DECKS.forEach(d=>QZ[d].forEach((q,i)=>items.push({d,i,q})));
   if(EX.only)items=items.filter(it=>EX.only.has(it.d+'-'+it.i));
   if(EX.mode==='mixed'){const r=rng(777+EX.att*31);for(let k=items.length-1;k>0;k--){const j=Math.floor(r()*(k+1));[items[k],items[j]]=[items[j],items[k]];}}
-  EX.items=items;EX.done={};EX.right={};}
-function exRender(){exBuild();const host=$('exam-list');let h='',lastD=null;
-  EX.items.forEach((it,n)=>{const {d,i,q}=it,nm=`x-${d}-${i}`;
-    if(EX.mode==='deck'&&it.d!==lastD){lastD=it.d;h+=`<h3 class="exdeck" id="ex-${d}">Deck ${d.slice(1)} · ${document.querySelector('#'+d+' h2').textContent}</h3>`;}
-    const seed=EX.att*101+i*17+d.charCodeAt(2)*11;
+  EX.items=items;EX.done={};EX.right={};EX.page=0;EX.pages=[];EX.pageOf={};
+  if(EX.mode==='deck'&&!EX.only){DECKS.forEach(d=>{const its=items.filter(it=>it.d===d);if(its.length)EX.pages.push({short:d.slice(1),label:`Deck ${d.slice(1)} · ${document.querySelector('#'+d+' h2').textContent}`,items:its});});}
+  else{for(let k=0;k<items.length;k+=8)EX.pages.push({short:'S'+(k/8+1),label:`Set ${k/8+1} · questions from several decks`,items:items.slice(k,k+8)});}
+  EX.pages.forEach((pg,p)=>pg.items.forEach(it=>EX.pageOf[it.d+'-'+it.i]=p));}
+function exPager(p){const N=EX.pages.length;return `<div class="pager"><button type="button" data-exp="${p-1}" ${p?'':'disabled'}>← Previous test</button><span>Test ${p+1} of ${N}</span><button type="button" class="nextbtn" data-exp="${p+1}" ${p<N-1?'':'disabled'}>Next test →</button></div>`;}
+function exRender(){exBuild();const host=$('exam-list');let h='';
+  EX.pages.forEach((pg,p)=>{h+=`<div class="expage" data-p="${p}"${p?' hidden':''}><h3 class="exdeck">Test ${p+1} of ${EX.pages.length} · ${pg.label}</h3>`;
+   pg.items.forEach((it,n)=>{const {d,i,q}=it,nm=`x-${d}-${i}`;const seed=EX.att*101+i*17+d.charCodeAt(2)*11;
     if(q.t==='mc'){const ord=shuffleIdx(q.o.length,seed);h+=`<div class="qq" data-k="${d}-${i}"><div class="qt"><span class="kind">${n+1} · Deck ${d.slice(1)} · Multiple choice</span>${q.q}</div><div class="opts">${ord.map((oi,k)=>`<label class="opt"><input type="radio" name="${nm}" value="${oi}"><span class="ol">${'ABCD'[k]}</span><span>${q.o[oi]}</span></label>`).join('')}</div><div class="qfb" hidden></div></div>`;}
     else{const ord=shuffleIdx(q.w.length,seed+5);h+=`<div class="qq" data-k="${d}-${i}"><div class="qt"><span class="kind">${n+1} · Deck ${d.slice(1)} · True / False / Uncertain</span>${q.q}</div><div class="tfu">${['T','F','U'].map(x=>`<label class="opt"><input type="radio" name="${nm}-tfu" value="${x}"><span>${TFU[x]}</span></label>`).join('')}</div><div class="why">${WHY}</div><div class="opts">${ord.map((oi,k)=>`<label class="opt"><input type="radio" name="${nm}-why" value="${oi}"><span class="ol">${'ABCD'[k]}</span><span>${q.w[oi]}</span></label>`).join('')}</div><div class="qfb" hidden></div></div>`;}});
+   h+=`<div class="qres pgres" hidden></div>${exPager(p)}</div>`;});
   host.innerHTML=h;$('exam-summary').hidden=true;exScore();typeset(host);}
+function exGo(p){if(p<0||p>=EX.pages.length)return;EX.page=p;document.querySelectorAll('#exam-list .expage').forEach(el=>el.hidden=+el.dataset.p!==p);exScore();window.scrollTo(0,0);}
+function exPageStats(p){const its=EX.pages[p].items;let n=0,r=0;its.forEach(it=>{const k=it.d+'-'+it.i;if(EX.done[k]){n++;if(EX.right[k])r++;}});return {t:its.length,n,r};}
+function exTot(){const n=Object.keys(EX.done).length,r=Object.values(EX.right).filter(Boolean).length;return {n,r,T:EX.items.length};}
+function exPageRes(p){const s=exPageStats(p),el=document.querySelector(`#exam-list .expage[data-p="${p}"] .pgres`);if(s.n<s.t){el.hidden=true;return;}
+  const tot=exTot(),pct=Math.round(100*s.r/s.t),cp=Math.round(100*tot.r/tot.n),last=p===EX.pages.length-1;
+  el.hidden=false;el.className='qres pgres '+(pct>=80?'pass':'fail');
+  el.innerHTML=`<b>Test ${p+1} complete: ${s.r} / ${s.t} (${pct}%).</b> Collective score so far: ${tot.r} / ${tot.n} (${cp}%, ${letter(cp)}).${last?'':`<div class="btns" style="margin-top:10px"><button type="button" class="nextbtn" data-exp="${p+1}">Next test: ${EX.pages[p+1].label} →</button></div>`}`;
+  el.scrollIntoView({block:'nearest',behavior:'smooth'});}
 function exGrade(key){if(EX.done[key])return;const [d,is]=key.split('-');const i=+is,q=QZ[d][i],el=document.querySelector(`#exam-list .qq[data-k="${key}"]`),nm=`x-${d}-${i}`;let ok;
   if(q.t==='mc'){const s=el.querySelector(`input[name="${nm}"]:checked`);if(!s)return;ok=+s.value===q.a;if(!ok)s.closest('.opt').classList.add('wrong');el.querySelector(`input[name="${nm}"][value="${q.a}"]`).closest('.opt').classList.add('right');}
   else{const s1=el.querySelector(`input[name="${nm}-tfu"]:checked`),s2=el.querySelector(`input[name="${nm}-why"]:checked`);if(!s1||!s2)return;const ok1=s1.value===q.a,ok2=+s2.value===q.wa;ok=ok1&&ok2;if(!ok1)s1.closest('.opt').classList.add('wrong');if(!ok2)s2.closest('.opt').classList.add('wrong');el.querySelector(`input[name="${nm}-tfu"][value="${q.a}"]`).closest('.opt').classList.add('right');el.querySelector(`input[name="${nm}-why"][value="${q.wa}"]`).closest('.opt').classList.add('right');}
   EX.done[key]=true;EX.right[key]=ok;el.querySelectorAll('input').forEach(x=>x.disabled=true);el.classList.add('answered');
   const fb=el.querySelector('.qfb');fb.hidden=false;fb.innerHTML=`<b class="${ok?'ok':'no'}">${ok?'Correct.':'Not quite.'}</b>${q.t==='tfu'?` The verdict is <b>${TFU[q.a]}</b>.`:''}<div class="fbrow"><span class="fbl">Formal</span><span>${q.e}</span></div><div class="fbrow"><span class="fbl intu">Intuition</span><span>${(INTU[d]&&INTU[d][i])||''}</span></div>${topicRow(d,'checkpoint',i)}<div class="exlink"><a href="#${d}">Review Deck ${d.slice(1)} in the study guide →</a></div>`;
-  exScore();if(Object.keys(EX.done).length===EX.items.length)exFinish();}
-function exScore(){const n=Object.keys(EX.done).length,r=Object.values(EX.right).filter(Boolean).length,T=EX.items.length;
-  $('exam-score').innerHTML=`<b>${n}</b> of ${T} answered · <b>${r}</b> correct${n?` · ${Math.round(100*r/n)}% so far`:''}`;
+  exScore();exPageRes(EX.pageOf[key]);if(Object.keys(EX.done).length===EX.items.length)exFinish();}
+function exScore(){const {n,r,T}=exTot(),cp=n?Math.round(100*r/n):null;
+  $('exam-score').innerHTML=`<div class="gradeline"><div class="gradebig${cp===null?'':cp>=80?' good':cp>=70?' mid':' low'}">${cp===null?'—':letter(cp)}</div><div><b>Collective: ${cp===null?'no answers yet':cp+'%'}</b>${n?` · ${r} correct of ${n} answered`:''} · ${T} questions in ${EX.pages.length} tests<br><span class="note">You're on test ${EX.page+1} of ${EX.pages.length}. Click a test below to jump to it.</span></div></div>`;
   $('exam-bar').style.width=(T?100*n/T:0)+'%';
-  const per={};EX.items.forEach(it=>{const k=it.d+'-'+it.i;per[it.d]=per[it.d]||{t:0,n:0,r:0};per[it.d].t++;if(EX.done[k]){per[it.d].n++;if(EX.right[k])per[it.d].r++;}});
-  $('exam-decks').innerHTML=Object.keys(per).map(d=>{const p=per[d];const cls=p.n===p.t?(p.r/p.t>=0.8?'good':'weak'):'';return `<a href="${EX.mode==='deck'?'#ex-'+d:'#practice-exam'}" class="exd ${cls}" data-exj="${d}"><span>${d.slice(1)}</span><b>${p.r}/${p.t}</b></a>`;}).join('');}
+  $('exam-decks').innerHTML=EX.pages.map((pg,p)=>{const s=exPageStats(p);const cls=s.n===s.t?(s.r/s.t>=0.8?' good':' weak'):'';return `<button type="button" class="exd${cls}${p===EX.page?' on':''}" data-exp="${p}" title="${pg.label}"><span>${pg.short}</span><b>${s.n?s.r+'/'+s.t:'–/'+s.t}</b></button>`;}).join('');}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-exp]');if(b&&!b.disabled)exGo(+b.dataset.exp);});
 function exFinish(){const T=EX.items.length,r=Object.values(EX.right).filter(Boolean).length,pct=Math.round(100*r/T);if(!EX.only){exBest.best=Math.max(exBest.best||0,pct);exBest.last=pct;try{localStorage.setItem('econ82300-exam',JSON.stringify(exBest));}catch(e){}}
   const per={};EX.items.forEach(it=>{const k=it.d+'-'+it.i;per[it.d]=per[it.d]||{t:0,r:0};per[it.d].t++;if(EX.right[k])per[it.d].r++;});
   const weak=Object.keys(per).filter(d=>per[d].r/per[d].t<0.8);const miss=Object.keys(EX.right).filter(k=>!EX.right[k]);
@@ -3477,26 +3496,31 @@ const MCQ=[
 ];
 let mcqAns={};try{mcqAns=JSON.parse(localStorage.getItem('econ82300-mcq')||'{}');}catch(e){mcqAns={};}
 const saveMCQ=()=>{try{localStorage.setItem('econ82300-mcq',JSON.stringify(mcqAns));}catch(e){}};
-let mcqFilter='all';
 function letter(p){return p>=93?'A':p>=90?'A−':p>=87?'B+':p>=83?'B':p>=80?'B−':p>=77?'C+':p>=73?'C':p>=70?'C−':p>=60?'D':'F';}
 function mcqKey(q){return q.d+'-'+MCQ.filter(x=>x.d===q.d).indexOf(q);}
 function mcqFeedback(q,chosen){const ok=chosen===q.a;return `<b class="${ok?'ok':'no'}">${ok?'Correct.':'Not quite.'}</b><div class="fbrow"><span class="fbl">Formal</span><span>${q.f}</span></div><div class="fbrow"><span class="fbl intu">Intuition</span><span>${q.n}</span></div>${topicRow(q.d,'mcq',MCQ.filter(x=>x.d===q.d).indexOf(q))}<div class="exlink"><a href="#${q.d}">Review Deck ${q.d.slice(1)} →</a></div>`;}
-function mcqRender(){const host=$('mcq-list');const items=MCQ.filter(q=>mcqFilter==='all'||q.d===mcqFilter);
-  host.innerHTML=items.map((q,n)=>{const k=mcqKey(q),ord=shuffleIdx(q.o.length,k.length*131+n*7+q.d.charCodeAt(2)*13+MCQ.indexOf(q)),ans=mcqAns[k];
-    return `<div class="qq${ans!==undefined?' answered':''}" data-m="${MCQ.indexOf(q)}"><div class="qt"><span class="kind">${n+1} · Deck ${q.d.slice(1)}</span>${q.q}</div><div class="opts">${ord.map((oi,j)=>{const cls=ans===undefined?'':(oi===q.a?' right':(oi===ans?' wrong':''));return `<label class="opt${cls}"><input type="radio" name="mcq-${k}" value="${oi}" ${ans!==undefined?'disabled':''} ${ans===oi?'checked':''}><span class="ol">${'ABCD'[j]}</span><span>${q.o[oi]}</span></label>`;}).join('')}</div><div class="qfb"${ans===undefined?' hidden':''}>${ans===undefined?'':mcqFeedback(q,ans)}</div></div>`;}).join('');
+let mcqFilter='d01';try{const v=localStorage.getItem('econ82300-mcqpage');if(v&&/^d(0[1-9]|1[0-2])$/.test(v))mcqFilter=v;}catch(e){}
+function mcqStats(d){let t=0,n=0,r=0;MCQ.forEach(q=>{if(d&&q.d!==d)return;t++;const a=mcqAns[mcqKey(q)];if(a!==undefined){n++;if(a===q.a)r++;}});return {t,n,r};}
+function mcqRender(){const host=$('mcq-list');const items=MCQ.filter(q=>q.d===mcqFilter),p=DECKS.indexOf(mcqFilter),N=DECKS.length;
+  host.innerHTML=`<h3 class="exdeck">Test ${p+1} of ${N} · Deck ${mcqFilter.slice(1)} · ${document.querySelector('#'+mcqFilter+' h2').textContent}</h3>`+items.map((q,n)=>{const k=mcqKey(q),ord=shuffleIdx(q.o.length,k.length*131+n*7+q.d.charCodeAt(2)*13+MCQ.indexOf(q)),ans=mcqAns[k];
+    return `<div class="qq${ans!==undefined?' answered':''}" data-m="${MCQ.indexOf(q)}"><div class="qt"><span class="kind">${n+1} · Deck ${q.d.slice(1)}</span>${q.q}</div><div class="opts">${ord.map((oi,j)=>{const cls=ans===undefined?'':(oi===q.a?' right':(oi===ans?' wrong':''));return `<label class="opt${cls}"><input type="radio" name="mcq-${k}" value="${oi}" ${ans!==undefined?'disabled':''} ${ans===oi?'checked':''}><span class="ol">${'ABCD'[j]}</span><span>${q.o[oi]}</span></label>`;}).join('')}</div><div class="qfb"${ans===undefined?' hidden':''}>${ans===undefined?'':mcqFeedback(q,ans)}</div></div>`;}).join('')
+   +`<div class="qres pgres" id="mcq-pgres" hidden></div><div class="pager"><button type="button" ${p?`data-mf="${DECKS[p-1]}"`:'disabled'}>← Previous test</button><span>Test ${p+1} of ${N}</span><button type="button" class="nextbtn" ${p<N-1?`data-mf="${DECKS[p+1]}"`:'disabled'}>Next test →</button></div>`;
   mcqGrade();typeset(host);}
-function mcqGrade(){const keys=Object.keys(mcqAns),scope=MCQ.filter(q=>mcqFilter==='all'||q.d===mcqFilter),sk=scope.map(mcqKey),ans=sk.filter(k=>mcqAns[k]!==undefined);
-  const right=ans.filter(k=>{const [d,i]=k.split('-');return mcqAns[k]===MCQ.filter(x=>x.d===d)[+i].a;}).length;
-  const allAns=keys.length,allRight=keys.filter(k=>{const [d,i]=k.split('-');const q=MCQ.filter(x=>x.d===d)[+i];return q&&mcqAns[k]===q.a;}).length;
-  const pct=ans.length?Math.round(100*right/ans.length):null,apct=allAns?Math.round(100*allRight/allAns):null;
-  $('mcq-grade').innerHTML=`<div class="gradebig${pct===null?'':pct>=80?' good':pct>=70?' mid':' low'}">${pct===null?'—':letter(pct)}</div><div><b>${pct===null?'No answers yet':pct+'%'}</b> ${mcqFilter==='all'?'overall':'in Deck '+mcqFilter.slice(1)}: ${right} correct of ${ans.length} answered (${scope.length} questions in view)${mcqFilter!=='all'&&apct!==null?`<br><span class="note">Overall: ${apct}% (${letter(apct)}) on ${allAns} answered</span>`:''}</div>`;
-  $('mcq-bar').style.width=(scope.length?100*ans.length/scope.length:0)+'%';
-  const per={};MCQ.forEach(q=>{const k=mcqKey(q);per[q.d]=per[q.d]||{t:0,n:0,r:0};per[q.d].t++;if(mcqAns[k]!==undefined){per[q.d].n++;if(mcqAns[k]===q.a)per[q.d].r++;}});
-  $('mcq-decks').innerHTML=`<button type="button" class="exd${mcqFilter==='all'?' on':''}" data-mf="all"><span>All</span><b>${allRight}/${MCQ.length}</b></button>`+Object.keys(per).map(d=>{const p=per[d];const cls=p.n?(p.r/p.n>=0.8?' good':' weak'):'';return `<button type="button" class="exd${cls}${mcqFilter===d?' on':''}" data-mf="${d}"><span>${d.slice(1)}</span><b>${p.r}/${p.t}</b></button>`;}).join('');}
+function mcqPageRes(scroll){const s=mcqStats(mcqFilter),el=$('mcq-pgres');if(!el)return;if(s.n<s.t){el.hidden=true;return;}
+  const a=mcqStats(),pct=Math.round(100*s.r/s.t),cp=Math.round(100*a.r/a.n),p=DECKS.indexOf(mcqFilter),nx=DECKS[p+1];
+  el.hidden=false;el.className='qres pgres '+(pct>=80?'pass':'fail');
+  el.innerHTML=`<b>Test ${p+1} complete: ${s.r} / ${s.t} (${pct}%).</b> Collective score so far: ${a.r} / ${a.n} (${cp}%, ${letter(cp)}).${nx?`<div class="btns" style="margin-top:10px"><button type="button" class="nextbtn" data-mf="${nx}">Next test: Deck ${nx.slice(1)} →</button></div>`:' That was the last test.'}`;
+  if(scroll)el.scrollIntoView({block:'nearest',behavior:'smooth'});}
+function mcqGrade(scroll){const a=mcqStats(),c=mcqStats(mcqFilter),cp=a.n?Math.round(100*a.r/a.n):null,p=DECKS.indexOf(mcqFilter);
+  $('mcq-grade').innerHTML=`<div class="gradebig${cp===null?'':cp>=80?' good':cp>=70?' mid':' low'}">${cp===null?'—':letter(cp)}</div><div><b>Collective: ${cp===null?'no answers yet':cp+'%'}</b>${a.n?` · ${a.r} correct of ${a.n} answered`:''} · ${a.t} questions in 12 tests<br><span class="note">This test (${p+1} of 12): ${c.r} correct of ${c.n} answered, ${c.t} questions. Click a test below to jump to it.</span></div>`;
+  $('mcq-bar').style.width=(100*a.n/a.t)+'%';
+  $('mcq-decks').innerHTML=DECKS.map(d=>{const s=mcqStats(d);const cls=s.n===s.t?(s.r/s.t>=0.8?' good':' weak'):'';return `<button type="button" class="exd${cls}${mcqFilter===d?' on':''}" data-mf="${d}"><span>${d.slice(1)}</span><b>${s.n?s.r+'/'+s.t:'–/'+s.t}</b></button>`;}).join('');
+  mcqPageRes(scroll);}
+function mcqGo(d){mcqFilter=d;try{localStorage.setItem('econ82300-mcqpage',d);}catch(e){}mcqRender();window.scrollTo(0,0);}
 document.addEventListener('change',e=>{const qq=e.target.closest('#mcq-list .qq');if(!qq)return;const q=MCQ[+qq.dataset.m],k=mcqKey(q);if(mcqAns[k]!==undefined)return;const v=+e.target.value;mcqAns[k]=v;saveMCQ();
   qq.classList.add('answered');qq.querySelectorAll('input').forEach(x=>x.disabled=true);qq.querySelectorAll('.opt').forEach(o=>{const oi=+o.querySelector('input').value;if(oi===q.a)o.classList.add('right');else if(oi===v)o.classList.add('wrong');});
-  const fb=qq.querySelector('.qfb');fb.hidden=false;fb.innerHTML=mcqFeedback(q,v);typeset(fb);mcqGrade();});
-document.addEventListener('click',e=>{const b=e.target.closest('[data-mf]');if(!b)return;mcqFilter=b.dataset.mf;mcqRender();});
+  const fb=qq.querySelector('.qfb');fb.hidden=false;fb.innerHTML=mcqFeedback(q,v);typeset(fb);mcqGrade(true);});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-mf]');if(!b||b.disabled)return;mcqGo(b.dataset.mf);});
 (function(){let armed=false;$('mcq-reset').onclick=e=>{const b=e.currentTarget;if(!armed){armed=true;b.textContent='Click again to clear all answers';setTimeout(()=>{armed=false;b.textContent='Reset my answers';},4000);return;}armed=false;b.textContent='Reset my answers';mcqAns={};saveMCQ();mcqRender();};
   $('mcq-missed').onclick=()=>{Object.keys(mcqAns).forEach(k=>{const [d,i]=k.split('-');const q=MCQ.filter(x=>x.d===d)[+i];if(q&&mcqAns[k]!==q.a)delete mcqAns[k];});saveMCQ();mcqRender();};})();
 
